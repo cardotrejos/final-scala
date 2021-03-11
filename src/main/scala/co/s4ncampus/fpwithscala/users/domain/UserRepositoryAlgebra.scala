@@ -5,5 +5,6 @@ import cats.data.OptionT
 trait UserRepositoryAlgebra[F[_]] {
   def create(user: User): F[User]
   def findByLegalId(legalId: String): OptionT[F, User]
-  def deleteByLegalId(legalId: String): OptionT[F, String]
+  def deleteUser(legalId: String): F[Int]
+  def updateUser(user: User): OptionT[F, User]
 }

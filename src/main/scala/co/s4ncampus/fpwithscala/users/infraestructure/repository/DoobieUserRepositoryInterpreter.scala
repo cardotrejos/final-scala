@@ -8,6 +8,7 @@ import doobie._
 import doobie.implicits._
 import cats.effect.Bracket
 
+
 private object UserSQL {
 
   def insert(user: User): Update0 = sql"""
@@ -21,27 +22,43 @@ private object UserSQL {
     WHERE LEGAL_ID = $legalId
   """.query[User]
 
-  def deleteByLegalId(legalId: String): Query0[User] = sql"""
+  def delete(legalId: String): Update0 = sql"""
     DELETE
     FROM USERS
     WHERE LEGAL_ID = $legalId
-  """.query[User]
+  """.update
 
+  def update(user: User, legalId: String): Update0 = sql"""
+    UPDATE USERS
+    SET ID = ${user.id}
+    SET FIRST_NAME = ${user.firstName}
+    SET LAST_NAME = ${user.lastName}
+    SET EMAIL = ${user.email}
+    SET PHONE = ${user.phone}
+    WHERE LEGAL_ID = $legalId
+       """.update
 
 }
 
 class DoobieUserRepositoryInterpreter[F[_]: Bracket[?[_], Throwable]](val xa: Transactor[F])
     extends UserRepositoryAlgebra[F] {
+
   import UserSQL._
 
-  def create(user: User): F[User] = 
+  def create(user: User): F[User] =
     insert(user).withUniqueGeneratedKeys[Long]("id").map(id => user.copy(id = id.some)).transact(xa)
 
   def findByLegalId(legalId: String): OptionT[F, User] = OptionT(selectByLegalId(legalId).option.transact(xa))
 
-  def deleteByLegalId(legalId: String): OptionT[F, String] = OptionT(deleteByLegalId(legalId).transact(xa))
+  def deleteUser(legalId: String): F[Int] = delete(legalId).run.transact(xa)
+
+  def updateUser(user: User): OptionT[F, User] =
+    OptionT.fromOption[F](Option(user.legalId)).semiflatMap { id =>
+      UserSQL.update(user, id).run.transact(xa).as(user)
+    }
 
 }
+
 
 object DoobieUserRepositoryInterpreter {
   def apply[F[_]: Bracket[?[_], Throwable]](xa: Transactor[F]): DoobieUserRepositoryInterpreter[F] =

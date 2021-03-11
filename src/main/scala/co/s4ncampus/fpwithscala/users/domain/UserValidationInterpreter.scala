@@ -2,6 +2,7 @@ package co.s4ncampus.fpwithscala.users.domain
 
 import cats.Applicative
 import cats.data.EitherT
+import cats.syntax.all._
 
 class UserValidationInterpreter[F[_]: Applicative](repository: UserRepositoryAlgebra[F])
     extends UserValidationAlgebra[F] {
@@ -9,8 +10,16 @@ class UserValidationInterpreter[F[_]: Applicative](repository: UserRepositoryAlg
   def doesNotExist(user: User): EitherT[F, UserAlreadyExistsError, Unit] = 
     repository.findByLegalId(user.legalId).map(UserAlreadyExistsError).toLeft(())
 
-  def doesNotUserExist(legalId: String): EitherT[F, UserDoesntExistsError, Unit] =
-    repository.deleteByLegalId(legalId).map(UserDoesntExistsError).toLeft(())
+  def exists(userId: Option[String]): EitherT[F, UserNotFoundError.type, Unit] =
+    userId match {
+      case Some(id) =>
+        repository
+          .findByLegalId(id)
+          .toRight(UserNotFoundError)
+          .void
+      case None =>
+        EitherT.left[Unit](UserNotFoundError.pure[F])
+    }
 
 }
 
